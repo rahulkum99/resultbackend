@@ -3,6 +3,9 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require('../modules/auth/auth.routes');
+const cricketRoutes = require('../modules/cricket/cricket.routes');
+const soccerRoutes = require('../modules/soccer/soccer.routes');
+const tennisRoutes = require('../modules/tennis/tennis.routes');
 
 
 // Health check route
@@ -12,6 +15,9 @@ router.get('/health', (req, res) => {
 
 // Mount route modules
 router.use('/auth', authRoutes);
+router.use('/cricket', cricketRoutes);
+router.use('/soccer', soccerRoutes);
+router.use('/tennis', tennisRoutes);
 
 
 module.exports = router;
