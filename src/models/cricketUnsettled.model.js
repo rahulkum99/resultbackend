@@ -2,14 +2,6 @@ const mongoose = require('mongoose');
 
 const cricketUnsettledSchema = new mongoose.Schema(
   {
-    exchangeKey: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    exchangeBaseUrl: {
-      type: String,
-    },
     eventId: {
       type: String,
       required: true,
@@ -24,14 +16,6 @@ const cricketUnsettledSchema = new mongoose.Schema(
       index: true,
     },
     marketName: {
-      type: String,
-    },
-    selectionId: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    selectionName: {
       type: String,
     },
     openBets: {
