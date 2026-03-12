@@ -1,10 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { protect } = require('../../middlewares/auth.middleware');
 
 const {
   getUnsettledSummary,
   getUnsettledByEventId,
 } = require('./tennis.controller');
+
+// Require authentication for all tennis routes
+router.use(protect);
 
 router.get('/unsettled/summary', getUnsettledSummary);
 router.get('/unsettled/:eventId', getUnsettledByEventId);
