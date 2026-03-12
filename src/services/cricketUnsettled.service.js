@@ -16,18 +16,18 @@ const fetchUnsettledCricketBets = async () => {
       )
     );
 
-    const all = [];
+    // De-duplicate across exchanges by eventId+marketId+selectionId
+    const byKey = new Map();
 
     results.forEach((result, index) => {
       const ex = exchanges[index];
       if (result.status === 'fulfilled') {
         const rows = result.value.data?.data?.cricket || [];
         rows.forEach((row) => {
-          all.push({
-            ...row,
-            exchangeKey: ex.key,
-            exchangeBaseUrl: ex.baseUrl,
-          });
+          const k = `${row?.eventId || ''}:${row?.marketId || ''}:${row?.selectionId || ''}`;
+          if (!byKey.has(k)) {
+            byKey.set(k, row);
+          }
         });
       } else {
         const status = result.reason?.response?.status;
@@ -35,7 +35,7 @@ const fetchUnsettledCricketBets = async () => {
       }
     });
 
-    return all;
+    return Array.from(byKey.values());
   } catch (error) {
     if (error.code === 'ECONNABORTED') {
       console.error('Cricket unsettled API error: Request timeout - API took longer than 15 seconds');
@@ -100,24 +100,21 @@ const enrichUnsettledWithSections = async () => {
   const bulkOps = enriched.map((bet) => ({
     updateOne: {
       filter: {
-        exchangeKey: String(bet.exchangeKey),
         eventId: String(bet.eventId),
         marketId: String(bet.marketId),
         selectionId: String(bet.selectionId),
       },
       update: {
         $set: {
-          exchangeKey: String(bet.exchangeKey),
-          exchangeBaseUrl: bet.exchangeBaseUrl,
           eventId: String(bet.eventId),
           eventName: bet.eventName,
           marketId: String(bet.marketId),
           marketName: bet.marketName,
           selectionId: String(bet.selectionId),
           selectionName: bet.selectionName,
-          openBets: bet.openBets,
-          totalStake: bet.totalStake,
-          totalExposure: bet.totalExposure,
+          openBets: typeof bet.openBets === 'number' ? bet.openBets : Number(bet.openBets),
+          totalStake: typeof bet.totalStake === 'number' ? bet.totalStake : Number(bet.totalStake),
+          totalExposure: typeof bet.totalExposure === 'number' ? bet.totalExposure : Number(bet.totalExposure),
           section: bet.section,
           inplay: bet.inplay,
           lastSeenAt: new Date(),

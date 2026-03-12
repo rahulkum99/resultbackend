@@ -18,6 +18,14 @@ const cricketUnsettledSchema = new mongoose.Schema(
     marketName: {
       type: String,
     },
+    selectionId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    selectionName: {
+      type: String,
+    },
     openBets: {
       type: Number,
     },
@@ -48,7 +56,7 @@ const cricketUnsettledSchema = new mongoose.Schema(
 );
 
 cricketUnsettledSchema.index(
-  { exchangeKey: 1, eventId: 1, marketId: 1, selectionId: 1 },
+  { eventId: 1, marketId: 1, selectionId: 1 },
   { unique: true }
 );
 

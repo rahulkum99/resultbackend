@@ -75,26 +75,63 @@ const getUnsettledByEventId = async (req, res, next) => {
       });
     }
 
-    const records = await SoccerUnsettled.find(
-      { eventId: String(eventId), openBets: { $gt: 0 } },
+    // Stored per (eventId+marketId+selectionId). For settlement UI we return one row per market.
+    const records = await SoccerUnsettled.aggregate([
       {
-        exchangeKey: 1,
-        exchangeBaseUrl: 1,
-        eventId: 1,
-        eventName: 1,
-        marketId: 1,
-        marketName: 1,
-        selectionId: 1,
-        selectionName: 1,
-        openBets: 1,
-        totalStake: 1,
-        totalExposure: 1,
-        section: 1,
-        inplay: 1,
-        lastSeenAt: 1,
-        _id: 0,
-      }
-    ).sort({ marketId: 1, selectionId: 1 });
+        $match: {
+          eventId: String(eventId),
+          openBets: { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            eventId: '$eventId',
+            eventName: '$eventName',
+            marketId: '$marketId',
+            marketName: '$marketName',
+          },
+          inplay: { $first: '$inplay' },
+          lastSeenAt: { $max: '$lastSeenAt' },
+          section: { $first: '$section' },
+          totalOpenBets: { $sum: '$openBets' },
+          totalStake: { $sum: '$totalStake' },
+          totalExposure: { $sum: '$totalExposure' },
+          selections: {
+            $push: {
+              selectionId: '$selectionId',
+              selectionName: '$selectionName',
+              openBets: '$openBets',
+              totalStake: '$totalStake',
+              totalExposure: '$totalExposure',
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          eventId: '$_id.eventId',
+          eventName: '$_id.eventName',
+          marketId: '$_id.marketId',
+          marketName: '$_id.marketName',
+          inplay: 1,
+          lastSeenAt: 1,
+          openBets: '$totalOpenBets',
+          totalStake: 1,
+          totalExposure: 1,
+          section: {
+            $map: {
+              input: { $ifNull: ['$section', []] },
+              as: 's',
+              in: { sid: '$$s.sid', nat: '$$s.nat' },
+            },
+          },
+          selections: 1,
+        },
+      },
+      { $sort: { marketId: 1 } },
+    ]);
 
     res.json({
       success: true,
