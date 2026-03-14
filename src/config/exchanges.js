@@ -1,7 +1,7 @@
 module.exports = [
   {
-    key: 'sitegenio',
-    baseUrl: 'https://api.sitegenio.com',
+    key: 'khelodost',
+    baseUrl: 'https://api.khelodost.live',
     apiKey: '1234567890',
   },
   // Add more exchanges here via env vars when needed

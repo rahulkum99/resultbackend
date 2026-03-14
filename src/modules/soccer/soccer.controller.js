@@ -1,7 +1,10 @@
 const SoccerUnsettled = require('../../models/soccerUnsettled.model');
+const SoccerSettlement = require('../../models/soccerSettlement.model');
+const SoccerEventState = require('../../models/soccerEventState.model');
 const { settleMatchOddsAllExchanges } = require('../../services/settlement.service');
 
 // GET /api/soccer/unsettled/summary
+// Returns: [{ exchangeKey, eventId, eventName, markets: [...], openEvent }]
 const getUnsettledSummary = async (req, res, next) => {
   try {
     const pipeline = [
@@ -39,12 +42,26 @@ const getUnsettledSummary = async (req, res, next) => {
         },
       },
       {
+        $lookup: {
+          from: 'soccereventstates',
+          localField: '_id.eventId',
+          foreignField: 'eventId',
+          as: 'state',
+        },
+      },
+      {
+        $addFields: {
+          state: { $arrayElemAt: ['$state', 0] },
+        },
+      },
+      {
         $project: {
           _id: 0,
           exchangeKey: '$_id.exchangeKey',
           eventId: '$_id.eventId',
           eventName: '$_id.eventName',
           markets: 1,
+          openEvent: { $ifNull: ['$state.isOpen', true] },
         },
       },
       {
@@ -128,14 +145,33 @@ const getUnsettledByEventId = async (req, res, next) => {
             },
           },
           selections: 1,
+          settled: { $literal: false },
+          exchange_report: { $literal: [] },
         },
       },
       { $sort: { marketId: 1 } },
     ]);
 
+    const settlements = await SoccerSettlement.find({ eventId: String(eventId) }).lean();
+    const byMarketId = new Map(settlements.map((s) => [s.marketId, s]));
+
+    const data = records.map((r) => {
+      const settlement = byMarketId.get(r.marketId);
+      if (settlement) {
+        return {
+          ...r,
+          settled: true,
+          exchange_report: settlement.exchangeReport || [],
+          winnerSelectionId: settlement.winnerSelectionId || null,
+          winnerSelectionName: settlement.winnerSelectionName || null,
+        };
+      }
+      return r;
+    });
+
     res.json({
       success: true,
-      data: records,
+      data,
     });
   } catch (error) {
     next(error);
@@ -143,10 +179,10 @@ const getUnsettledByEventId = async (req, res, next) => {
 };
 
 // POST /api/soccer/settle/match-odds
-// Body: { eventId, marketId, winnerSelectionId, marketName }
+// Body: { eventId, marketId, winnerSelectionId, winnerSelectionName?, marketName }
 const settleMatchOdds = async (req, res, next) => {
   try {
-    const { eventId, marketId, winnerSelectionId, marketName } = req.body;
+    const { eventId, marketId, winnerSelectionId, winnerSelectionName, marketName } = req.body;
 
     if (!eventId || !marketId || !winnerSelectionId) {
       return res.status(400).json({
@@ -155,12 +191,44 @@ const settleMatchOdds = async (req, res, next) => {
       });
     }
 
+    let resolvedWinnerName = winnerSelectionName;
+    if (resolvedWinnerName == null || resolvedWinnerName === '') {
+      const row = await SoccerUnsettled.findOne({
+        eventId: String(eventId),
+        marketId: String(marketId),
+        selectionId: String(winnerSelectionId),
+      }).lean();
+      resolvedWinnerName = row?.selectionName || null;
+    }
+
     const results = await settleMatchOddsAllExchanges({
       eventId,
       marketId,
       winnerSelectionId,
       marketName,
     });
+
+    const exchangeReport = results.map((r) => ({
+      exchangeKey: r.exchangeKey,
+      success: r.success,
+      ...(r.data != null && { data: r.data }),
+      ...(r.error != null && { error: r.error }),
+      ...(r.status != null && { status: r.status }),
+    }));
+
+    await SoccerSettlement.findOneAndUpdate(
+      { eventId: String(eventId), marketId: String(marketId) },
+      {
+        eventId: String(eventId),
+        marketId: String(marketId),
+        marketName: marketName || null,
+        winnerSelectionId: String(winnerSelectionId),
+        winnerSelectionName: resolvedWinnerName,
+        exchangeReport,
+        settledAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
 
     res.json({
       success: true,
@@ -171,9 +239,65 @@ const settleMatchOdds = async (req, res, next) => {
   }
 };
 
+// POST /api/soccer/unsettled/events/:eventId/open
+const openSoccerEvent = async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message: 'eventId is required',
+      });
+    }
+
+    const state = await SoccerEventState.findOneAndUpdate(
+      { eventId: String(eventId) },
+      { eventId: String(eventId), isOpen: true, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      data: state,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/soccer/unsettled/events/:eventId/close
+const closeSoccerEvent = async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message: 'eventId is required',
+      });
+    }
+
+    const state = await SoccerEventState.findOneAndUpdate(
+      { eventId: String(eventId) },
+      { eventId: String(eventId), isOpen: false, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      data: state,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUnsettledSummary,
   getUnsettledByEventId,
   settleMatchOdds,
+  openSoccerEvent,
+  closeSoccerEvent,
 };
 

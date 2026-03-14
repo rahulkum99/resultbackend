@@ -1,8 +1,10 @@
 const CricketUnsettled = require('../../models/cricketUnsettled.model');
+const CricketSettlement = require('../../models/cricketSettlement.model');
+const CricketEventState = require('../../models/cricketEventState.model');
 const { settleMatchOddsAllExchanges } = require('../../services/settlement.service');
 
 // GET /api/cricket/unsettled/summary
-// Returns: [{ eventId, eventName, markets: [{ marketId, marketName, totalOpenBets }] }]
+// Returns: [{ eventId, eventName, markets: [{ marketId, marketName, totalOpenBets }], openEvent }]
 const getUnsettledSummary = async (req, res, next) => {
   try {
     const pipeline = [
@@ -38,11 +40,25 @@ const getUnsettledSummary = async (req, res, next) => {
         },
       },
       {
+        $lookup: {
+          from: 'cricketeventstates',
+          localField: '_id.eventId',
+          foreignField: 'eventId',
+          as: 'state',
+        },
+      },
+      {
+        $addFields: {
+          state: { $arrayElemAt: ['$state', 0] },
+        },
+      },
+      {
         $project: {
           _id: 0,
           eventId: '$_id.eventId',
           eventName: '$_id.eventName',
           markets: 1,
+          openEvent: { $ifNull: ['$state.isOpen', true] },
         },
       },
       {
@@ -127,14 +143,33 @@ const getUnsettledByEventId = async (req, res, next) => {
             },
           },
           selections: 1,
+          settled: { $literal: false },
+          exchange_report: { $literal: [] },
         },
       },
       { $sort: { marketId: 1 } },
     ]);
 
+    const settlements = await CricketSettlement.find({ eventId: String(eventId) }).lean();
+    const byMarketId = new Map(settlements.map((s) => [s.marketId, s]));
+
+    const data = records.map((r) => {
+      const settlement = byMarketId.get(r.marketId);
+      if (settlement) {
+        return {
+          ...r,
+          settled: true,
+          exchange_report: settlement.exchangeReport || [],
+          winnerSelectionId: settlement.winnerSelectionId || null,
+          winnerSelectionName: settlement.winnerSelectionName || null,
+        };
+      }
+      return r;
+    });
+
     res.json({
       success: true,
-      data: records,
+      data,
     });
   } catch (error) {
     next(error);
@@ -142,10 +177,10 @@ const getUnsettledByEventId = async (req, res, next) => {
 };
 
 // POST /api/cricket/settle/match-odds
-// Body: { eventId, marketId, winnerSelectionId, marketName }
+// Body: { eventId, marketId, winnerSelectionId, winnerSelectionName?, marketName }
 const settleMatchOdds = async (req, res, next) => {
   try {
-    const { eventId, marketId, winnerSelectionId, marketName } = req.body;
+    const { eventId, marketId, winnerSelectionId, winnerSelectionName, marketName } = req.body;
 
     if (!eventId || !marketId || !winnerSelectionId) {
       return res.status(400).json({
@@ -154,12 +189,44 @@ const settleMatchOdds = async (req, res, next) => {
       });
     }
 
+    let resolvedWinnerName = winnerSelectionName;
+    if (resolvedWinnerName == null || resolvedWinnerName === '') {
+      const row = await CricketUnsettled.findOne({
+        eventId: String(eventId),
+        marketId: String(marketId),
+        selectionId: String(winnerSelectionId),
+      }).lean();
+      resolvedWinnerName = row?.selectionName || null;
+    }
+
     const results = await settleMatchOddsAllExchanges({
       eventId,
       marketId,
       winnerSelectionId,
       marketName,
     });
+
+    const exchangeReport = results.map((r) => ({
+      exchangeKey: r.exchangeKey,
+      success: r.success,
+      ...(r.data != null && { data: r.data }),
+      ...(r.error != null && { error: r.error }),
+      ...(r.status != null && { status: r.status }),
+    }));
+
+    await CricketSettlement.findOneAndUpdate(
+      { eventId: String(eventId), marketId: String(marketId) },
+      {
+        eventId: String(eventId),
+        marketId: String(marketId),
+        marketName: marketName || null,
+        winnerSelectionId: String(winnerSelectionId),
+        winnerSelectionName: resolvedWinnerName,
+        exchangeReport,
+        settledAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
 
     res.json({
       success: true,
@@ -170,9 +237,65 @@ const settleMatchOdds = async (req, res, next) => {
   }
 };
 
+// POST /api/cricket/unsettled/events/:eventId/open
+const openCricketEvent = async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message: 'eventId is required',
+      });
+    }
+
+    const state = await CricketEventState.findOneAndUpdate(
+      { eventId: String(eventId) },
+      { eventId: String(eventId), isOpen: true, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      data: state,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/cricket/unsettled/events/:eventId/close
+const closeCricketEvent = async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message: 'eventId is required',
+      });
+    }
+
+    const state = await CricketEventState.findOneAndUpdate(
+      { eventId: String(eventId) },
+      { eventId: String(eventId), isOpen: false, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      data: state,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUnsettledSummary,
   getUnsettledByEventId,
   settleMatchOdds,
+  openCricketEvent,
+  closeCricketEvent,
 };
 
