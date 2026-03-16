@@ -6,8 +6,7 @@ const {
   getUnsettledSummary,
   getUnsettledByEventId,
   settleMatchOdds,
-  openSoccerEvent,
-  closeSoccerEvent,
+  setSoccerEventOpen,
 } = require('./soccer.controller');
 
 // Require authentication for all soccer routes
@@ -19,11 +18,8 @@ router.get('/unsettled/:eventId', getUnsettledByEventId);
 // POST /api/soccer/settle/match-odds
 router.post('/settle/match-odds', settleMatchOdds);
 
-// POST /api/soccer/unsettled/events/:eventId/open
-router.post('/unsettled/events/:eventId/open', openSoccerEvent);
-
-// POST /api/soccer/unsettled/events/:eventId/close
-router.post('/unsettled/events/:eventId/close', closeSoccerEvent);
+// POST /api/soccer/unsettled/events/set-open — body: { eventId, openEvent: true | false }
+router.post('/unsettled/events/set-open', setSoccerEventOpen);
 
 module.exports = router;
 

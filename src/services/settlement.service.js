@@ -10,16 +10,7 @@ const toMarketType = (marketName) => {
   }
 };
 
-const settleMatchOddsAllExchanges = async ({ eventId, marketId, winnerSelectionId, marketName }) => {
-  const marketType = toMarketType(marketName);
-
-  const payload = {
-    marketType,
-    eventId: String(eventId),
-    marketId: String(marketId),
-    winnerSelectionId: String(winnerSelectionId),
-  };
-
+const postSettleToAllExchanges = async (payload) => {
   const results = await Promise.allSettled(
     exchanges.map((ex) =>
       axios.post(`${ex.baseUrl}/api/bets/settle`, payload, {
@@ -50,7 +41,43 @@ const settleMatchOddsAllExchanges = async ({ eventId, marketId, winnerSelectionI
   });
 };
 
+const settleMatchOddsAllExchanges = async ({ eventId, marketId, winnerSelectionId, marketName }) => {
+  const marketType = toMarketType(marketName);
+
+  const payload = {
+    marketType,
+    eventId: String(eventId),
+    marketId: String(marketId),
+    winnerSelectionId: String(winnerSelectionId),
+  };
+
+  return postSettleToAllExchanges(payload);
+};
+
+const settleTosMarketAllExchanges = async ({ eventId, marketId, winnerSelectionId }) => {
+  const payload = {
+    marketType: 'tos_market',
+    eventId: String(eventId),
+    marketId: String(marketId),
+    winnerSelectionId: String(winnerSelectionId),
+  };
+
+  return postSettleToAllExchanges(payload);
+};
+
+const settleBookmakerFancyAllExchanges = async ({ eventId, marketId, winnerSelectionId }) => {
+  const payload = {
+    marketType: 'bookmaker_fancy',
+    eventId: String(eventId),
+    marketId: String(marketId),
+    winnerSelectionId: String(winnerSelectionId),
+  };
+  return postSettleToAllExchanges(payload);
+};
+
 module.exports = {
   settleMatchOddsAllExchanges,
+  settleTosMarketAllExchanges,
+  settleBookmakerFancyAllExchanges,
 };
 

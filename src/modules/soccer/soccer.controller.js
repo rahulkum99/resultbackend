@@ -4,9 +4,14 @@ const SoccerEventState = require('../../models/soccerEventState.model');
 const { settleMatchOddsAllExchanges } = require('../../services/settlement.service');
 
 // GET /api/soccer/unsettled/summary
-// Returns: [{ exchangeKey, eventId, eventName, markets: [...], openEvent }]
+// Query: page (default 1), limit (default 20), openEvent (optional: 'true' | 'false' to filter)
+// Returns: { data: [...], total, page, limit }
 const getUnsettledSummary = async (req, res, next) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const openEventFilter = req.query.openEvent;
+
     const pipeline = [
       {
         $match: {
@@ -64,16 +69,32 @@ const getUnsettledSummary = async (req, res, next) => {
           openEvent: { $ifNull: ['$state.isOpen', true] },
         },
       },
-      {
-        $sort: { eventId: 1 },
-      },
     ];
 
-    const summary = await SoccerUnsettled.aggregate(pipeline);
+    if (openEventFilter === 'true' || openEventFilter === 'false') {
+      pipeline.push({
+        $match: { openEvent: openEventFilter === 'true' },
+      });
+    }
+
+    pipeline.push({ $sort: { eventId: 1 } });
+    pipeline.push({
+      $facet: {
+        total: [{ $count: 'total' }],
+        data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+      },
+    });
+
+    const [result] = await SoccerUnsettled.aggregate(pipeline);
+    const total = result?.total?.[0]?.total ?? 0;
+    const data = result?.data ?? [];
 
     res.json({
       success: true,
-      data: summary,
+      data,
+      total,
+      page,
+      limit,
     });
   } catch (error) {
     next(error);
@@ -239,10 +260,11 @@ const settleMatchOdds = async (req, res, next) => {
   }
 };
 
-// POST /api/soccer/unsettled/events/:eventId/open
-const openSoccerEvent = async (req, res, next) => {
+// POST /api/soccer/unsettled/events/set-open
+// Body: { eventId, openEvent: true | false }
+const setSoccerEventOpen = async (req, res, next) => {
   try {
-    const { eventId } = req.params;
+    const { eventId, openEvent } = req.body;
 
     if (!eventId) {
       return res.status(400).json({
@@ -251,36 +273,11 @@ const openSoccerEvent = async (req, res, next) => {
       });
     }
 
-    const state = await SoccerEventState.findOneAndUpdate(
-      { eventId: String(eventId) },
-      { eventId: String(eventId), isOpen: true, updatedAt: new Date() },
-      { upsert: true, new: true }
-    );
-
-    res.json({
-      success: true,
-      data: state,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// POST /api/soccer/unsettled/events/:eventId/close
-const closeSoccerEvent = async (req, res, next) => {
-  try {
-    const { eventId } = req.params;
-
-    if (!eventId) {
-      return res.status(400).json({
-        success: false,
-        message: 'eventId is required',
-      });
-    }
+    const isOpen = openEvent === true || openEvent === 'true';
 
     const state = await SoccerEventState.findOneAndUpdate(
       { eventId: String(eventId) },
-      { eventId: String(eventId), isOpen: false, updatedAt: new Date() },
+      { eventId: String(eventId), isOpen, updatedAt: new Date() },
       { upsert: true, new: true }
     );
 
@@ -297,7 +294,6 @@ module.exports = {
   getUnsettledSummary,
   getUnsettledByEventId,
   settleMatchOdds,
-  openSoccerEvent,
-  closeSoccerEvent,
+  setSoccerEventOpen,
 };
 

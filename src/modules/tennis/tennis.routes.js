@@ -6,8 +6,7 @@ const {
   getUnsettledSummary,
   getUnsettledByEventId,
   settleMatchOdds,
-  openTennisEvent,
-  closeTennisEvent,
+  setTennisEventOpen,
 } = require('./tennis.controller');
 
 // Require authentication for all tennis routes
@@ -19,11 +18,8 @@ router.get('/unsettled/:eventId', getUnsettledByEventId);
 // POST /api/tennis/settle/match-odds
 router.post('/settle/match-odds', settleMatchOdds);
 
-// POST /api/tennis/unsettled/events/:eventId/open
-router.post('/unsettled/events/:eventId/open', openTennisEvent);
-
-// POST /api/tennis/unsettled/events/:eventId/close
-router.post('/unsettled/events/:eventId/close', closeTennisEvent);
+// POST /api/tennis/unsettled/events/set-open — body: { eventId, openEvent: true | false }
+router.post('/unsettled/events/set-open', setTennisEventOpen);
 
 module.exports = router;
 

@@ -6,8 +6,9 @@ const {
   getUnsettledSummary,
   getUnsettledByEventId,
   settleMatchOdds,
-  openCricketEvent,
-  closeCricketEvent,
+  setCricketEventOpen,
+  settleTosMarket,
+  settleBookmakerFancy,
 } = require('./cricket.controller');
 
 // Require authentication for all cricket routes
@@ -22,11 +23,14 @@ router.get('/unsettled/:eventId', getUnsettledByEventId);
 // POST /api/cricket/settle/match-odds
 router.post('/settle/match-odds', settleMatchOdds);
 
-// POST /api/cricket/unsettled/events/:eventId/open
-router.post('/unsettled/events/:eventId/open', openCricketEvent);
+// POST /api/cricket/settle/tos-market
+router.post('/settle/tos-market', settleTosMarket);
 
-// POST /api/cricket/unsettled/events/:eventId/close
-router.post('/unsettled/events/:eventId/close', closeCricketEvent);
+// POST /api/cricket/settle/bookmaker-fancy
+router.post('/settle/bookmaker-fancy', settleBookmakerFancy);
+
+// POST /api/cricket/unsettled/events/set-open — body: { eventId, openEvent: true | false }
+router.post('/unsettled/events/set-open', setCricketEventOpen);
 
 module.exports = router;
 
