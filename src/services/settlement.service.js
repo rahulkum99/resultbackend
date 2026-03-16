@@ -67,7 +67,7 @@ const settleTosMarketAllExchanges = async ({ eventId, marketId, winnerSelectionI
 
 const settleBookmakerFancyAllExchanges = async ({ eventId, marketId, winnerSelectionId }) => {
   const payload = {
-    marketType: 'bookmaker_fancy',
+    marketType: 'bookmakers_fancy',
     eventId: String(eventId),
     marketId: String(marketId),
     winnerSelectionId: String(winnerSelectionId),

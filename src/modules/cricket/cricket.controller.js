@@ -4,6 +4,7 @@ const CricketEventState = require('../../models/cricketEventState.model');
 const {
   settleMatchOddsAllExchanges,
   settleTosMarketAllExchanges,
+  settleBookmakerFancyAllExchanges,
 } = require('../../services/settlement.service');
 
 // GET /api/cricket/unsettled/summary
