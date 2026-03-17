@@ -9,6 +9,7 @@ const {
   setCricketEventOpen,
   settleTosMarket,
   settleBookmakerFancy,
+  settleFancy,
 } = require('./cricket.controller');
 
 // Require authentication for all cricket routes
@@ -28,6 +29,9 @@ router.post('/settle/tos-market', settleTosMarket);
 
 // POST /api/cricket/settle/bookmaker-fancy
 router.post('/settle/bookmaker-fancy', settleBookmakerFancy);
+
+// POST /api/cricket/settle/fancy
+router.post('/settle/fancy', settleFancy);
 
 // POST /api/cricket/unsettled/events/set-open — body: { eventId, openEvent: true | false }
 router.post('/unsettled/events/set-open', setCricketEventOpen);
